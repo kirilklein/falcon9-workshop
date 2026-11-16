@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#c4e6f8">
+<link rel="icon" href="data:,">
+<title>Мастерская ракеты Falcon 9</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <button id="reset" class="round" aria-label="Сначала">↺</button>
+  <button id="mute" class="round" aria-label="Звук">🔊</button>
+  <div id="title">Мастерская ракеты Falcon 9</div>
+  <div id="bubble" hidden><span id="bIcon"></span><span id="bText"></span></div>
+  <div id="count"></div>
+
+  <div id="ctx">
+    <button id="back" class="chunky" hidden aria-label="Назад">⬅ <span>Назад</span></button>
+    <div id="lever" aria-label="Потяни рычаг, чтобы разобрать">
+      <div id="track"><i></i><i></i><i></i><i></i><i></i></div>
+      <div id="knob">↔</div>
+    </div>
+    <div id="dots" hidden></div>
+    <button id="next" class="chunky" hidden aria-label="Дальше">▶ <span>Дальше</span></button>
+    <button id="go" hidden aria-label="Пуск"><b>🚀</b><span>ПУСК</span></button>
+    <div id="flight" hidden>
+      <div id="bar"><div id="fill"></div><div id="chapters"></div></div>
+      <div id="fbtns">
+        <button id="rew" class="chunky" aria-label="Перемотать назад">⏪</button>
+        <button id="pp" class="chunky" aria-label="Пауза или пуск">⏸</button>
+        <button id="replay" class="chunky" aria-label="Ещё раз">🔁</button>
+      </div>
+    </div>
+  </div>
+
+  <nav id="tabs">
+    <button data-mode="explore" class="on"><b>🔍</b><span>Смотреть</span></button>
+    <button data-mode="build"><b>🔧</b><span>Собрать</span></button>
+    <button data-mode="launch"><b>🚀</b><span>Запуск</span></button>
+  </nav>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
