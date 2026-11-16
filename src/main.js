@@ -5,7 +5,7 @@ import { buildHangar, PAD, AX_Y, BENCH_TOP } from './hangar.js';
 import { clamp, lerp, sstep, ease, damp } from './util.js';
 import * as sfx from './audio.js';
 import * as flight from './flight.js';
-import { buildEngine, INTRO, APART_HINT, PIECES, STEPS, BOX } from './engine.js';
+import { buildEngine, INTRO, APART_HINT, STEPS } from './engine.js';
 
 const $ = s => document.querySelector(s);
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -45,7 +45,7 @@ const S = {
   focus: null, camFocus: null, revealOn: false,
   selected: null, drag: null, doneTimer: 0, pendingScatter: false, ring: null,
   standU: 0, ft: 0, playing: false, seek: null,
-  engOut: 0, engSpread: 0, engGoal: 0, step: 0, cd: 0, sayT: 0,
+  engOut: 0, step: 0, cd: 0, sayT: 0,
 };
 const allPlaced = () => ORDER.every(id => parts[id].placed);
 const busy = () => ORDER.some(id => parts[id].tween);
@@ -99,8 +99,8 @@ function computeGoal() {
     for (const x of [-0.75, 0.75]) for (const z of [-0.75, 0.75]) for (const y of [-2.4, TOTAL]) pv(x, y, z).applyMatrix4(root.matrixWorld); // extra room below for the GO button
     t = bboxCenter(poolN);
   } else if (S.camFocus === 'engine') {
-    v = fview;
-    for (const x of BOX.x) for (const y of BOX.y) for (const z of BOX.z) pv(x, y, z).multiplyScalar(ENG_S).add(ENG_OUT);
+    v = fview; const B = eng.box();
+    for (const x of B.x) for (const y of B.y) for (const z of B.z) pv(x, y, z).multiplyScalar(ENG_S).add(ENG_OUT);
     t = bboxCenter(poolN);
   } else if (S.camFocus) {
     v = fview; const id = S.camFocus, i = INFO[id];
@@ -145,15 +145,19 @@ function say(i) { $('#bIcon').textContent = i.icon; $('#bText').textContent = i.
 function focusEngine() {
   if (S.focus === 'engine') return;
   fview.az = 0.6; fview.el = 0.22;
-  Object.assign(S, { focus: 'engine', camFocus: 'engine', step: 0, engGoal: 0 });
+  Object.assign(S, { focus: 'engine', camFocus: 'engine', step: 0 }); eng.reset();
   say(INTRO); sfx.whoosh();
 }
 function setStep(n) {
   S.step = n;
   if (!n) return say(APART_HINT);
-  S.engGoal = 0; say(STEPS[n - 1]); if (STEPS[n - 1].pop) eng.pop(STEPS[n - 1].pop); sfx.pick();
+  eng.focus.goal = 0; say(STEPS[n - 1]); if (STEPS[n - 1].pop) eng.pop(STEPS[n - 1].pop); sfx.pick();
 }
-function back() { if (!S.focus) return; S.focus = null; $('#bubble').hidden = true; sfx.speak(); sfx.whoosh(); }
+function back(all) { // one level up inside the engine; all: leave whatever is focused
+  if (!S.focus) return;
+  if (!all && S.focus === 'engine' && eng.up()) { say(eng.focus.info); sfx.whoosh(); return; }
+  S.focus = null; $('#bubble').hidden = true; sfx.speak(); sfx.whoosh();
+}
 
 // ---------------------------------------------------------------- build
 function moveTo(p, to, dur, arc = 0, delay = 0, done = null) { p.tween = { from: p.pos.clone(), to: to.clone(), t: -delay, dur, arc, done }; }
@@ -187,16 +191,16 @@ function refreshDots() { [...$('#dots').children].forEach((d, i) => d.classList.
 function setMode(m) {
   if (m === 'launch' && !allPlaced()) { nudge($('[data-mode=build]')); sfx.boop(); return; }
   if (m === S.mode) return;
-  back(); Object.assign(S, { selected: null, drag: null, spreadGoal: 0, playing: false, seek: null, doneTimer: 0, pendingScatter: false, cd: 0, mode: m });
+  back(true); Object.assign(S, { selected: null, drag: null, spreadGoal: 0, playing: false, seek: null, doneTimer: 0, pendingScatter: false, cd: 0, mode: m });
   if (m === 'build') { if (allPlaced()) S.pendingScatter = true; }
   else for (const id of ORDER) { const p = parts[id]; if (!p.placed) moveTo(p, homeV(id), 0.6, 0.6, 0, () => { p.placed = true; refreshDots(); }); }
   sfx.whoosh();
 }
 function reset() {
   sfx.clunk(); S.zoom = 1; views = defaults(); userMoved = false;
-  if (S.mode === 'build') { back(); S.selected = null; S.drag = null; S.doneTimer = 0; S.pendingScatter = true; }
+  if (S.mode === 'build') { back(true); S.selected = null; S.drag = null; S.doneTimer = 0; S.pendingScatter = true; }
   else if (S.mode !== 'explore') setMode('explore');
-  else { back(); S.spreadGoal = 0; }
+  else { back(true); S.spreadGoal = 0; }
 }
 function nudge(el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
 
@@ -301,14 +305,14 @@ function update(dt) {
     damp(parts[id], 'reveal', on ? 1 : 0, 0.3, dt);
     parts[id].reveal = clamp(parts[id].reveal, 0, 1); maxR = Math.max(maxR, parts[id].reveal);
   }
-  damp(S, 'engOut', S.focus === 'engine' ? 1 : 0, 0.35, dt); damp(S, 'engSpread', S.engGoal, 0.3, dt);
+  damp(S, 'engOut', S.focus === 'engine' ? 1 : 0, 0.35, dt);
   if (!S.focus && S.camFocus && Math.max(maxR, S.engOut) < 0.4) S.camFocus = null;    // Back: close first, then glide out
 
   layoutParts(dt);
   { // the big engine grows out of the booster's base and stands upright
     const k = ease(clamp(S.engOut, 0, 1)), g = eng.group;
     g.visible = k > 0.01; g.position.lerpVectors(LIE, ENG_OUT, k); g.rotation.z = -Math.PI / 2 * (1 - k); g.scale.setScalar(lerp(0.2, ENG_S, k));
-    if (g.visible) eng.update(S.engSpread, S.focus === 'engine' ? S.step : 0, S.t, dt);
+    if (g.visible) eng.update(S.focus === 'engine' ? S.step : 0, S.t, dt);
   }
   if (flight) { if (S.ft > 0) flight.apply(S.ft, rocket, hangar, S.t); else flight.hideFx(hangar); }
   root.updateMatrixWorld(true);
@@ -391,8 +395,8 @@ function onTap(e) {
   if (S.mode === 'explore') {
     if (S.standU > 0) return;
     if (S.focus === 'engine') {
-      setRay(e); const h = ray.intersectObjects(eng.pick, false)[0];
-      if (h) { const id = h.object.userData.piece; say(PIECES[id]); eng.pop(id); sfx.pick(); return; }
+      setRay(e); const n = eng.child(ray.intersectObjects(eng.pick, false).filter(h => vis(h.object)));
+      if (n) { if (n.kids.length) { eng.enter(n); S.step = 0; sfx.whoosh(); } else { n.pop = 1; sfx.pick(); } say(n.info); return; }
     }
     const id = hitPart(e);
     if (id && hitObj.userData.engine) focusEngine(); else if (id) focusPart(id); else back();
@@ -447,21 +451,21 @@ document.addEventListener('pointerdown', () => $('#title').classList.add('gone')
 
 // ---------------------------------------------------------------- DOM controls
 const press = (el, fn) => el.addEventListener('click', e => { sfx.unlock(); fn(e); });
-press($('#back'), back); press($('#reset'), reset); press($('#next'), () => setStep(S.step % STEPS.length + 1));
+press($('#back'), () => back()); press($('#reset'), reset); press($('#next'), () => setStep(S.step % STEPS.length + 1));
 press($('#mute'), () => { const m = $('#mute').textContent === '🔊'; $('#mute').textContent = m ? '🔇' : '🔊'; sfx.setMuted(m); });
 document.querySelectorAll('#tabs button').forEach(b => press(b, () => setMode(b.dataset.mode)));
 for (let i = 0; i < ORDER.length; i++) $('#dots').appendChild(document.createElement('i'));
 { // the big lever
   const lever = $('#lever'); let lv = null; lever.classList.add('hint');
   const span = () => lever.clientWidth - $('#knob').offsetWidth;
-  lever.addEventListener('pointerdown', e => { sfx.unlock(); lever.setPointerCapture(e.pointerId); lever.classList.remove('hint'); lv = { k: S.focus === 'engine' ? 'engGoal' : 'spreadGoal', x0: e.clientX, moved: false }; lv.v0 = lv.last = S[lv.k]; });
+  lever.addEventListener('pointerdown', e => { sfx.unlock(); lever.setPointerCapture(e.pointerId); lever.classList.remove('hint'); lv = S.focus === 'engine' ? { o: eng.focus, k: 'goal' } : { o: S, k: 'spreadGoal' }; Object.assign(lv, { x0: e.clientX, moved: false, v0: lv.o[lv.k], last: lv.o[lv.k] }); });
   lever.addEventListener('pointermove', e => {
     if (!lv) return; const dx = e.clientX - lv.x0; if (Math.abs(dx) > 6) lv.moved = true;
-    if (lv.moved) { S[lv.k] = clamp(lv.v0 + dx / span(), 0, 1); if (Math.abs(S[lv.k] - lv.last) > 0.12) { lv.last = S[lv.k]; sfx.tick(); } }
+    if (lv.moved) { lv.o[lv.k] = clamp(lv.v0 + dx / span(), 0, 1); if (Math.abs(lv.o[lv.k] - lv.last) > 0.12) { lv.last = lv.o[lv.k]; sfx.tick(); } }
   });
   const end = e => {
-    if (!lv) return; if (!lv.moved && e.type === 'pointerup') S[lv.k] = S[lv.k] > 0.5 ? 0 : 1;
-    if (S.focus === 'engine' && S.engGoal > 0 && S.step) setStep(0);
+    if (!lv) return; if (!lv.moved && e.type === 'pointerup') lv.o[lv.k] = lv.o[lv.k] > 0.5 ? 0 : 1;
+    if (S.focus === 'engine' && lv.o[lv.k] > 0 && S.step) setStep(0);
     sfx.clunk(); lv = null;
   };
   lever.addEventListener('pointerup', end); lever.addEventListener('pointercancel', end);
@@ -480,19 +484,19 @@ if (flight) {
 let uiKey = '', countTxt = '';
 function syncUI() {
   const ready = S.mode === 'launch' && S.standU >= 1 && S.ft === 0 && !S.cd, flying = S.mode === 'launch' && S.ft > 0;
-  const engOn = S.focus === 'engine';
-  const key = [S.mode, S.focus, S.step, ready, flying, allPlaced(), S.playing || !!S.seek, flight && S.ft >= flight.T_END].join();
+  const engOn = S.focus === 'engine', engTop = engOn && !eng.depth;
+  const key = [S.mode, S.focus, eng.depth, S.step, ready, flying, allPlaced(), S.playing || !!S.seek, flight && S.ft >= flight.T_END].join();
   if (key !== uiKey) {
     uiKey = key;
     $('#lever').hidden = S.mode !== 'explore' || (!!S.focus && !engOn); $('#back').hidden = !S.focus;
-    $('#ctx').classList.toggle('eng', engOn); $('#next').hidden = !engOn;
+    $('#ctx').classList.toggle('eng', engOn); $('#next').hidden = !engTop;
     if (engOn) [...$('#dots').children].forEach((d, i) => d.classList.toggle('on', i < S.step)); else refreshDots();
-    $('#dots').hidden = S.mode !== 'build' && !engOn; $('#go').hidden = !ready; $('#flight').hidden = !flying;
+    $('#dots').hidden = S.mode !== 'build' && !engTop; $('#go').hidden = !ready; $('#flight').hidden = !flying;
     document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('on', b.dataset.mode === S.mode); b.classList.toggle('locked', b.dataset.mode === 'launch' && !allPlaced()); });
     $('#pp').textContent = S.playing || S.seek ? '⏸' : '▶️';
     $('#replay').classList.toggle('pulse', !!(flight && S.ft >= flight.T_END));
   }
-  $('#knob').style.transform = `translateX(${(engOn ? S.engGoal : S.spreadGoal) * ($('#lever').clientWidth - 68)}px)`;
+  $('#knob').style.transform = `translateX(${(engOn ? eng.focus.goal : S.spreadGoal) * ($('#lever').clientWidth - 68)}px)`;
   let n = -1;
   if (S.cd > 0) n = 3 + Math.ceil(S.cd);
   if (flying) {
