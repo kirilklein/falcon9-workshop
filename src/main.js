@@ -6,6 +6,11 @@ import { clamp, lerp, sstep, ease, damp } from './util.js';
 import * as sfx from './audio.js';
 import * as flight from './flight.js';
 import { buildEngine, INTRO, APART_HINT, STEPS } from './engine.js';
+import { tr } from './en.js';
+
+document.title = tr(document.title);
+for (const e of document.querySelectorAll('#hud [aria-label]')) e.ariaLabel = tr(e.ariaLabel);
+for (const e of document.querySelectorAll('#title, #hud span')) e.textContent = tr(e.textContent);
 
 const $ = s => document.querySelector(s);
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -141,7 +146,7 @@ function focusPart(id) {
   S.focus = id; S.camFocus = id; S.revealOn = keep && S.revealOn;
   say(INFO[id]); sfx.whoosh();
 }
-function say(i) { $('#bIcon').textContent = i.icon; $('#bText').textContent = i.text; const b = $('#bubble'); b.hidden = true; void b.offsetWidth; b.hidden = false; sfx.speak(i.text); S.sayT = 0; }
+function say(i) { const text = tr(i.text); $('#bIcon').textContent = i.icon; $('#bText').textContent = text; const b = $('#bubble'); b.hidden = true; void b.offsetWidth; b.hidden = false; sfx.speak(text); S.sayT = 0; }
 function focusEngine() {
   if (S.focus === 'engine') return;
   fview.az = 0.6; fview.el = 0.22;
@@ -477,7 +482,7 @@ if (flight) {
   press($('#replay'), () => seekTo(0));
   press($('#rew'), () => { let t = 0; for (const c of flight.CHAPTERS) if (c.t < S.ft - 1.2) t = c.t; seekTo(t); });
   for (const c of flight.CHAPTERS) {
-    const b = document.createElement('button'); b.textContent = c.icon; b.title = c.name; b.dataset.t = c.t; b.style.left = (c.t / flight.T_END * 100) + '%';
+    const b = document.createElement('button'); b.textContent = c.icon; b.title = tr(c.name); b.dataset.t = c.t; b.style.left = (c.t / flight.T_END * 100) + '%';
     press(b, () => seekTo(c.t)); $('#chapters').appendChild(b);
   }
 }
@@ -504,8 +509,8 @@ function syncUI() {
     if (S.ft < 3) n = Math.ceil(3 - S.ft); else if (S.ft < 3.9) n = 0;
     for (const b of $('#chapters').children) b.classList.toggle('on', S.ft >= +b.dataset.t);
   }
-  const txt = n < 0 ? '' : n ? String(n) : 'ПУСК!';
-  if (txt !== countTxt && txt && (S.cd > 0 || S.playing)) { sfx.speak(flight.COUNT[n].text); if (S.cd > 0) sfx.beep(false); }
+  const txt = n < 0 ? '' : n ? String(n) : tr('ПУСК!');
+  if (txt !== countTxt && txt && (S.cd > 0 || S.playing)) { sfx.speak(tr(flight.COUNT[n].text)); if (S.cd > 0) sfx.beep(false); }
   if (txt !== countTxt) { countTxt = txt; const c = $('#count'); c.textContent = txt; c.classList.remove('tick'); void c.offsetWidth; c.classList.add('tick'); }
 }
 

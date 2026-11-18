@@ -2,6 +2,8 @@
 
 A playable Three.js model kit: explore a Falcon 9, take it apart, snap it back together, and launch it.
 
+Play it: [Russian](https://kirilklein.github.io/falcon9-workshop/) · [English](https://kirilklein.github.io/falcon9-workshop/?lang=en) (add `?lang=en`; English texts live in `src/en.js`)
+
 ## Run
 
     python3 serve.py      # then open http://localhost:8000
